@@ -1,9 +1,10 @@
-CC = gcc
+.PHONY: build rebuild clean
 CFLAGS = $(shell pkg-config --cflags libnotify)
 LIBS = $(shell pkg-config --libs libnotify)
+build:
+	gcc -Wall -Wextra -O2 main.c notify.c -o notify $(CFLAGS) $(LIBS)
 
-noti: noti.c battery.c
-	$(CC) noti.c battery.c -o noti $(CFLAGS) $(LIBS)
+rebuild: clean build
 
 clean:
-	rm -f noti
+	rm -f notify
