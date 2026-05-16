@@ -14,14 +14,13 @@ int sendMessage(const char *c) {
 
     if (m == NULL) {
         fprintf(stderr, "failed to create notification object\n");
-        g_object_unref(G_OBJECT(m));
         return 1;
     }
     if (!notify_notification_show(m, NULL)) {
         fprintf(stderr, "failed to send notification object\n");
-        g_object_unref(G_OBJECT(m));
         return 1;
     }
+    g_object_unref(G_OBJECT(m));
     return 0;
 }
 

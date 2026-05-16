@@ -1,86 +1,109 @@
 #include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <sys/poll.h>
 #include <unistd.h>
 #include <signal.h>
 #include "notify.h"
 
-volatile sig_atomic_t running = 1;
+volatile sig_atomic_t running = 1; // volatile so this variable isn't cached in a reg
 
 void handle_signal(int sig) {
     (void)sig;
-    running = 0;
+    running = 0; // signal came stop event loop
+}
+
+int powerFD,statusFD;
+
+int cleanupLogic(char flag) {
+    switch (flag) {
+        case'r':  // read error
+        case'n':  // notify error
+        notifyUninit();
+        close(powerFD);
+        close(statusFD);
+        return 1;
+
+        case'f':  // fd error
+        close(powerFD);
+        close(statusFD);
+        return 1;
+
+        case'i':  // interupt which is not an error
+        notifyUninit();
+        close(powerFD);
+        close(statusFD);
+        return 0;
+
+        default:
+        return -1;
+    }
 }
 
 int main () {
     char capacityBuff,statusBuff;
     _Bool highBatteryNotifed = 0, lowBatteryNotifed = 0;
 
-    int powerFD =  open("/sys/class/power_supply/BAT1/capacity" ,O_RDONLY);
-    int statusFD = open("/sys/class/power_supply/BAT1/status"   ,O_RDONLY);
+    powerFD =  open("/sys/class/power_supply/BAT1/capacity" ,O_RDONLY);
+    statusFD = open("/sys/class/power_supply/BAT1/status"   ,O_RDONLY);
 
-    if (powerFD == -1) return 1;
-    if (statusFD == -1) { close(powerFD); return 1; }
+    if (powerFD ==  -1){
+        return 1;
+    }
+    if (statusFD == -1) {
+        close(powerFD);
+        return 1;
+    }
 
-    struct pollfd pfd = {powerFD , POLLPRI | POLLERR , 0};
+    struct pollfd pfd = {powerFD , POLLPRI | POLLERR , 0};  // wait for the fd changes
 
-    if ( notifyInit() != 0) goto fdClean;
+    if ( notifyInit() != 0) return cleanupLogic('f');
 
     struct sigaction sa = {0};
-    sa.sa_handler = &handle_signal;
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGINT, &sa, NULL);
+    sa.sa_handler = &handle_signal; // pass addr of fun to modify running
+    sigaction(SIGTERM, &sa, NULL);  // the actions that modify
+    sigaction(SIGINT,  &sa, NULL);
 
-       while (running) {
+    while (running) {
+
         int percentage = 0;
-
         lseek(powerFD  ,0, SEEK_SET);
         lseek(statusFD ,0, SEEK_SET);
-
         while (1) {
-            if ( read(powerFD, &capacityBuff, sizeof capacityBuff) != 1 ) goto readErrorMessage;
-
+            if ( read(powerFD, &capacityBuff, sizeof capacityBuff) != 1 ){
+                return cleanupLogic('r');
+            }
             if (capacityBuff != '\n') {
-            percentage = percentage * 10 + ( capacityBuff - '0');
+                percentage = percentage * 10 + ( capacityBuff - '0');
             } else break;
         }
-
-        if ( read(statusFD , &statusBuff, sizeof statusBuff ) != 1 ) goto readErrorMessage;
-
+        if ( read(statusFD , &statusBuff, sizeof statusBuff ) != 1 ){
+            return cleanupLogic('r');
+        }
         switch (statusBuff) {
             case'C':
             if (percentage >= 78 && !highBatteryNotifed) {
                 highBatteryNotifed = 1;
-                if ( sendMessage("Battery charged, Unplug now! or else suffer") != 0) goto notifyClean;
-            }
-            break;
-
+                if ( sendMessage("Battery charged, Unplug now! or else suffer") != 0){
+                    return cleanupLogic('n');
+                }
+            } break;
             default:
             if (percentage <= 25 && !lowBatteryNotifed) {
                 lowBatteryNotifed = 1;
-                if ( sendMessage("quick.. ur machine is dying.. its running out of energy, supply it with dc.. what are you waiting for?") != 0) goto notifyClean;
-            }
-            break;
+                if ( sendMessage("quick.. ur machine is dying.. its running out of energy, supply it with dc.. what are you waiting for?") != 0){
+                    return cleanupLogic('n');
+                }
+            } break;
         }
-
         if (percentage < 75) highBatteryNotifed = 0;
         if (percentage > 25) lowBatteryNotifed = 0;
 
         int pollResult = poll(&pfd, 1, -1);
-        if (pollResult == -1 && errno == EINTR ) goto interrupted;
+        if (pollResult == -1){
+            if (errno == EINTR ) return cleanupLogic('i'); // clean then return 0
+            else return cleanupLogic('n'); // here i want to return 1 if poll() fails
+        }
     }
 
-    readErrorMessage:
-    fprintf(stderr,"failed to read battery sysfs information\n");
-    notifyClean:
-    notifyUninit();
-    fdClean:
-    close(powerFD); close(statusFD);
-    return 1;
-
-    interrupted:
-    notifyUninit();
-    close(powerFD); close(statusFD);
-    return 0;
+    return cleanupLogic('i');
 }
