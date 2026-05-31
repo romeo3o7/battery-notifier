@@ -5,12 +5,13 @@
 #include <fcntl.h>
 #include <sys/poll.h>
 #include <unistd.h>
-#include <signal.h>
 #include "notify.h"
-#include <signal.h>
 
 typedef struct files {
     int powerFD;
     int statusFD;
 }files;
+
+int cleanupLogic(char flag, files *fd);
+ 
 #endif
