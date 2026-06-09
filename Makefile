@@ -1,11 +1,13 @@
 .PHONY: build rebuild clean
 CFLAGS = $(shell pkg-config --cflags libnotify)
 LIBS = $(shell pkg-config --libs libnotify)
-build:
-	gcc -Wall -Wextra -O2 src/battery.c src/notify.c src/event.c -o build/application  $(CFLAGS) $(LIBS) -lsystemd
+buildtest:
+	gcc -Wall -Wextra -O2 src/battery.c src/notify.c src/event.c -o build/test/application  $(CFLAGS) $(LIBS) -lsystemd
 
+buildfinal:
+	gcc -Wall -Wextra -O2 src/battery.c src/notify.c src/event.c -o build/release/application  $(CFLAGS) $(LIBS) -lsystemd
 
-rebuild: clean build
+rebuild: clean buildtest
 
 clean:
-	rm -f notify
+	rm -f build/release/* rm -f build/test/*
