@@ -1,48 +1,65 @@
+#include "../include/battery.h"
+#include "../include/notify.h"
 #include <systemd/sd-bus.h>
-#include <sys/epoll.h>
-#include <unistd.h>
-#include <stdio.h>
 
+status s = {
+    .hpn = false,
+    .lpn = false,
+    .per = 0.0  
+};
 
-int parsing(struct sd_bus_message *m, void *userdata, struct sd_bus_error *error)  {
-        puts("signal");
-        return 0;
+int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error) {
+    (void) error; 
+    (void) userdata;
+    const char *iface;
+    //we read to skip it
+    sd_bus_message_read(m, "s", &iface);
+
+    // enter the a{sv} array
+    sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}");
+
+    while (sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv") > 0) { // loop as much it returns
+        const char *key;
+        sd_bus_message_read(m, "s", &key);  // read the dictonary key
+
+        if (strcmp(key, "Percentage") == 0) {
+            // enter the variant continer 
+            sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, "d");
+            sd_bus_message_read(m, "d", &s.per);
+            sd_bus_message_exit_container(m);  // exit variant  
+            logic(&s);
+        } else {
+            sd_bus_message_skip(m, "v");  // skip unknown variant 
+        }
+
+        sd_bus_message_exit_container(m);  // exit the current {sv} dictonary entry
+    }
+
+     sd_bus_message_exit_container(m);  // exit the a{sv} array
+     return 0;
     }
 int main() {
+    notifyInit();
     sd_bus *bus = NULL;
-    sd_bus_error error = SD_BUS_ERROR_NULL;
-    sd_bus_message *m = NULL;
-
     sd_bus_open_system(&bus); // assigns me to the dbus
-    
-    int busFd = sd_bus_get_fd(bus);
-    
-    int epfd = epoll_create1(0);
+    sd_event *event = NULL;
 
-    struct epoll_event ev = {
-        .events = EPOLLIN ,
-        .data.fd =busFd 
-    };
+    sd_event_default(&event); // creates a event object
+    sd_bus_attach_event(bus,event,0); // attack the bus to the event 
 
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD,busFd, &ev) < 0) return -1;
-    void *userdata = NULL;
-    sd_bus_match_signal(bus, 
+    sd_bus_match_signal(bus, // regsites me for signals and runs my parsing when signal is recived
                 NULL, 
                 "org.freedesktop.UPower", 
                 "/org/freedesktop/UPower/devices/battery_BAT1", 
                 "org.freedesktop.DBus.Properties", 
                 "PropertiesChanged",
                 parsing,
-                &userdata);
+                NULL);
 
-     for(;;) {   
-        epoll_wait(epfd, &ev, 1, -1);
-        while (sd_bus_process(bus,NULL)> 0 );
-     }
-    cleanup:
-    sd_bus_error_free(&error);
+    sd_event_loop(event); // event loop 
+
     sd_bus_unref(bus);
-    if (epfd >= 0) close(epfd);
+    sd_event_unref(event);
 
     return 0;
 }
