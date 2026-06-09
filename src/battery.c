@@ -1,4 +1,4 @@
-#include "battery.h"
+#include "../include/battery.h"
 
 int main () {
     char capacityBuff,statusBuff;
@@ -73,7 +73,7 @@ int cleanupLogic(char flag , files *fds) {
         case'r':  // read error
         case'n':  // notify error
         notifyUninit();
-        if (fds->powerFD   != -1) close(fds->powerFD); // making sure the fd is -1 otherwise 
+        if (fds->powerFD   != -1) close(fds->powerFD); // making sure the fd is -1 otherwise
         if (fds-> statusFD != -1) close(fds->statusFD);
         return 1;
 

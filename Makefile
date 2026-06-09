@@ -2,7 +2,7 @@
 CFLAGS = $(shell pkg-config --cflags libnotify)
 LIBS = $(shell pkg-config --libs libnotify)
 build:
-	gcc -Wall -Wextra -O2 battery.c notify.c -o notify $(CFLAGS) $(LIBS)
+	gcc -Wall -Wextra -O2 src/battery.c src/notify.c -o build/notify $(CFLAGS) $(LIBS)
 
 rebuild: clean build
 
