@@ -1,42 +1,49 @@
 #include <systemd/sd-bus.h>
+#include <sys/epoll.h>
+#include <unistd.h>
+#include <stdio.h>
 
+
+int parsing(struct sd_bus_message *m, void *userdata, struct sd_bus_error *error)  {
+        puts("signal");
+        return 0;
+    }
 int main() {
     sd_bus *bus = NULL;
     sd_bus_error error = SD_BUS_ERROR_NULL;
-    sd_bus_message *reply = NULL;
+    sd_bus_message *m = NULL;
 
     sd_bus_open_system(&bus); // assigns me to the dbus
+    
+    int busFd = sd_bus_get_fd(bus);
+    
+    int epfd = epoll_create1(0);
 
-    if (sd_bus_call_method(bus,  // to get back the device i want path
-            "org.freedesktop.UPower",
-            "/org/freedesktop/UPower",
-            "org.freedesktop.UPower",
-            "GetDisplayDevice",
-            &error,
-            &reply,
-            NULL) < 0) return 1;
+    struct epoll_event ev = {
+        .events = EPOLLIN ,
+        .data.fd =busFd 
+    };
 
-    const char *device_path;
-    sd_bus_message_read(reply, "o", &device_path); // read it as object in device path
-    sd_bus_message_unref(reply);
-    reply = NULL;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD,busFd, &ev) < 0) return -1;
+    void *userdata = NULL;
+    sd_bus_match_signal(bus, 
+                NULL, 
+                "org.freedesktop.UPower", 
+                "/org/freedesktop/UPower/devices/battery_BAT1", 
+                "org.freedesktop.DBus.Properties", 
+                "PropertiesChanged",
+                parsing,
+                &userdata);
 
-    if (sd_bus_get_property(bus, // get the percentage propety from upower
-            "org.freedesktop.UPower",
-            device_path,
-            "org.freedesktop.UPower.Device",
-            "Percentage",
-            &error,
-            &reply,
-            "d") < 0) return 1;
-
-    double percentage;
-    sd_bus_message_read(reply, "d", &percentage);
-    sd_bus_message_unref(reply);
-
+     for(;;) {   
+        epoll_wait(epfd, &ev, 1, -1);
+        while (sd_bus_process(bus,NULL)> 0 );
+     }
+    cleanup:
     sd_bus_error_free(&error);
     sd_bus_unref(bus);
+    if (epfd >= 0) close(epfd);
 
-    printf("percentage = %d\n", (int)percentage);
     return 0;
 }
+   
