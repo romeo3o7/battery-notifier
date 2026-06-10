@@ -1,44 +1,5 @@
-#include "../include/battery.h"
-#include "../include/notify.h"
-#include <systemd/sd-bus.h>
-#include <string.h>
-status s = {
-    .hpn = false,
-    .lpn = false,
-    .per = 0.0  
-};
-
-int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error) {
-    (void) error; 
-    (void) userdata;
-    const char *iface;
-    //we read to skip it
-    sd_bus_message_read(m, "s", &iface);
-
-    // enter the a{sv} array
-    sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}");
-
-    while (sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv") > 0) { // loop as much it returns
-        const char *key;
-        sd_bus_message_read(m, "s", &key);  // read the dictonary key
-
-        if (strcmp(key, "Percentage") == 0) {
-            // enter the variant continer 
-            sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, "d");
-            sd_bus_message_read(m, "d", &s.per);
-            sd_bus_message_exit_container(m);  // exit variant  
-            logic(&s);
-        } else {
-            sd_bus_message_skip(m, "v");  // skip unknown variant 
-        }
-
-        sd_bus_message_exit_container(m);  // exit the current {sv} dictonary entry
-    }
-
-     sd_bus_message_exit_container(m);  // exit the a{sv} array
-     return 0;
-    }
-
+#define BUS
+#include "../include/global.h"
 int main() {
     sd_bus *bus = NULL;
     if ( sd_bus_open_system(&bus) < 0) return 1; // assigns me to the dbus
@@ -63,8 +24,8 @@ int main() {
     sd_event_loop(event); // event loop 
     
     cleanup:
-    sd_bus_unref(bus);
     sd_event_unref(event);
+    sd_bus_unref(bus);
     notifyUninit();
 
     return 0;
