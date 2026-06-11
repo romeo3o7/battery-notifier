@@ -26,6 +26,7 @@ int logic(battery *state) {
 }
 
 int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error) {
+    bool triggerCheck = false;
     (void) error; 
     (void) userdata;
     const char *iface;
@@ -34,7 +35,7 @@ int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error) {
 
     // enter the a{sv} array
     sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}");
-
+    
     while (sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv") > 0) { // loop as much it returns
         const char *key;
         sd_bus_message_read(m, "s", &key);  // read the dictonary key
@@ -47,7 +48,7 @@ int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error) {
             sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, "d");
             sd_bus_message_read(m, "d", &state.per);
             sd_bus_message_exit_container(m);  // exit variant  
-
+            triggerCheck = true;
         } else {
             sd_bus_message_skip(m, "v");  // skip unneeded variant 
         }
@@ -56,7 +57,9 @@ int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error) {
     }
 
      sd_bus_message_exit_container(m);  // exit the a{sv} array
-     if ( logic(&state) < 0) return -1;
+     if (triggerCheck) {
+         if (logic(&state) < 0) return -1;
+     }
      return 0;
     }
 

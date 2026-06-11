@@ -10,4 +10,4 @@ buildfinal:
 rebuild: clean buildtest
 
 clean:
-	rm -f build/release/* rm -f build/test/*
+	rm -f build/release/* build/test/*
