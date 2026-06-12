@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <systemd/sd-bus.h>
 
+
 #ifdef BUS
 int notifyInit();
 void notifyUninit();
@@ -12,7 +13,7 @@ int parsing(sd_bus_message *m, void *userdata, sd_bus_error *error);
 typedef struct  { 
     bool hpn;
     bool lpn;
-    int isCharging;
+    uint32_t isCharging;
     double per;
 }battery;
 
